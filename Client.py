@@ -6,6 +6,7 @@ import threading
 import sys
 import traceback
 import os
+import time
 
 from RtpPacket import RtpPacket
 
@@ -26,9 +27,6 @@ class Client:
 
     # Initiation..
     def __init__(self, master, serveraddr, serverport, rtpport, filename):
-        # FIX: master is destroy
-        self.destroy = False
-
         self.master = master
         self.master.protocol("WM_DELETE_WINDOW", self.handler)
         self.createWidgets()
@@ -86,9 +84,6 @@ class Client:
         """Teardown button handler."""
         self.sendRtspRequest(self.TEARDOWN)
         self.master.destroy()  # Close the gui window
-
-        self.destroy = True
-
         # Delete the cache image from video
         fullFileName = CACHE_FILE_NAME + str(self.sessionId) + CACHE_FILE_EXT
         # FIX: add os.path.exists() to check file exist or not
@@ -123,8 +118,12 @@ class Client:
 
                     if currFrameNbr > self.frameNbr:  # Discard the late packet
                         self.frameNbr = currFrameNbr
-                        self.updateMovie(self.writeFrame(
-                            rtpPacket.getPayload()))
+                        # FIX: add condition
+                        if (self.requestSent != self.TEARDOWN):
+                            self.updateMovie(self.writeFrame(
+                                rtpPacket.getPayload()))
+                        else:
+                            break
             except:
                 # Stop listening upon requesting PAUSE or TEARDOWN
                 if self.playEvent.isSet():
@@ -276,7 +275,8 @@ class Client:
                         self.teardownAcked = 1
 
                     # FIX: call function
-                    self.changeStatusButton()
+                    if (self.teardownAcked == 0):
+                        self.changeStatusButton()
 
     def openRtpPort(self):
         """Open RTP socket binded to a specified port."""
@@ -302,11 +302,13 @@ class Client:
         if tkinter.messagebox.askokcancel("Quit?", "Are you sure you want to quit?"):
             self.exitClient()
         else:  # When the user presses cancel, resume playing.
-            self.playMovie()
+            # FIX: can not resume if not begin yet
+            if (self.frameNbr > 0):
+                self.playMovie()
 
     # FIX: add disable status for button
     def changeStatusButton(self):
-        if self.state == self.INIT and self.destroy == False:
+        if self.state == self.INIT:
             self.setup['state'] = NORMAL
             self.start['state'] = DISABLED
             self.pause['state'] = DISABLED
