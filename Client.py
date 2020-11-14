@@ -108,6 +108,8 @@ class Client:
         """Listen for RTP packets."""
         while True:
             try:
+                # FIX: handle 404
+                self.rtpSocket.settimeout(0.5)
                 data = self.rtpSocket.recv(20480)
                 if data:
                     rtpPacket = RtpPacket()
@@ -134,6 +136,11 @@ class Client:
                 if self.teardownAcked == 1:
                     self.rtpSocket.shutdown(socket.SHUT_RDWR)
                     self.rtpSocket.close()
+                    break
+                
+                # FIX: handle timeout exception
+                if (self.frameNbr == 0):
+                    tkinter.messagebox.showwarning("File not found", "Can not find " + self.fileName)
                     break
 
     def writeFrame(self, data):
