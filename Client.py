@@ -31,7 +31,7 @@ class Client:
     def __init__(self, master, serveraddr, serverport, rtpport, filename):
         self.master = master
         self.master.protocol("WM_DELETE_WINDOW", self.handler)
-        
+        self.createWidgets()
         self.serverAddr = serveraddr
         self.serverPort = int(serverport)
         self.rtpPort = int(rtpport)
@@ -42,33 +42,44 @@ class Client:
         self.teardownAcked = 0
         self.connectToServer()
         self.frameNbr = 0
-        self.createWidgets()
 
     def createWidgets(self):
         """Build GUI."""
         # Create Setup button
-        self.setup = Button(self.master, width=20, padx=3, pady=3)
-        self.setup["text"] = "Setup"
-        self.setup["command"] = self.setupMovie
-        self.setup.grid(row=1, column=0, padx=2, pady=2)
+        # self.setup = Button(self.master, width=20, padx=3, pady=3)
+        # self.setup["text"] = "Setup"
+        # self.setup["command"] = self.setupMovie
+        # self.setup.grid(row=1, column=0, padx=2, pady=2)
+
+        # Create Option button
+        self.option = Button(self.master, width=20, padx=3, pady=3)
+        self.option["text"] = "Option"
+        self.option["command"] = self.sendOptionsRequest
+        self.option.grid(row=1, column=0, padx=2, pady=2)
+
+        # Create Describe button
+        self.describe = Button(self.master, width=20, padx=3, pady=3)
+        self.describe["text"] = "Describe"
+        self.describe["command"] = self.sendDescribeRequest
+        self.describe.grid(row=1, column=1, padx=2, pady=2)
 
         # Create Play button
         self.start = Button(self.master, width=20, padx=3, pady=3)
         self.start["text"] = "Play"
-        self.start["command"] = self.playMovie
-        self.start.grid(row=1, column=1, padx=2, pady=2)
+        self.start["command"] = self.setupMovie
+        self.start.grid(row=1, column=2, padx=2, pady=2)
 
         # Create Pause button
         self.pause = Button(self.master, width=20, padx=3, pady=3)
         self.pause["text"] = "Pause"
         self.pause["command"] = self.pauseMovie
-        self.pause.grid(row=1, column=2, padx=2, pady=2)
+        self.pause.grid(row=1, column=3, padx=2, pady=2)
 
         # Create Teardown button
         self.teardown = Button(self.master, width=20, padx=3, pady=3)
         self.teardown["text"] = "Teardown"
         self.teardown["command"] = self.exitClient
-        self.teardown.grid(row=1, column=3, padx=2, pady=2)
+        self.teardown.grid(row=1, column=4, padx=2, pady=2)
 
         # Create a label to display the movie
         self.label = Label(self.master, height=19)
@@ -77,12 +88,13 @@ class Client:
 
         # FIX: call function
         self.changeStatusButton()
-        #self.setupMovie()
 
     def setupMovie(self):
         """Setup button handler."""
         if self.state == self.INIT:
             self.sendRtspRequest(self.SETUP)
+        else: self.playMovie()
+
 
     def exitClient(self):
         """Teardown button handler."""
@@ -166,12 +178,10 @@ class Client:
         self.rtspSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.rtspSocket.connect((self.serverAddr, self.serverPort))
+            threading.Thread(target=self.recvRtspReply).start()
         except:
             tkinter.messagebox.showwarning(
                 'Connection Failed', 'Connection to \'%s\' failed.' % self.serverAddr)
-
-        self.sendOptionsRequest()
-        self.sendDescribeRequest()
 
     def sendRtspRequest(self, requestCode):
         """Send RTSP request to the server."""
@@ -228,8 +238,8 @@ class Client:
             # Keep track of the sent request.
             # self.requestSent = ...
             self.requestSent = self.TEARDOWN
+
         elif requestCode == self.OPTIONS:
-            threading.Thread(target=self.recvRtspReply).start()
             # Update RTSP sequence number.
             self.rtspSeq += 1
             # Write the RTSP request to be sent.
@@ -239,6 +249,7 @@ class Client:
             # Keep track of the sent request.
             # self.requestSent = ...
             self.requestSent = self.OPTIONS
+            
         elif requestCode == self.DESCRIBE:
             # Update RTSP sequence number.
             self.rtspSeq += 1
@@ -299,7 +310,8 @@ class Client:
                             self.state = self.READY
                             # Open RTP port.
                             self.openRtpPort()
-                            #self.playMovie()
+                            self.playMovie()
+
                         elif self.requestSent == self.PLAY:
                             # self.state = ...
                             self.state = self.PLAYING
@@ -349,18 +361,17 @@ class Client:
     # FIX: add disable status for button
     def changeStatusButton(self):
         if self.state == self.INIT:
-            self.setup['state'] = NORMAL
-            self.start['state'] = DISABLED
+            # self.setup['state'] = NORMAL
+            self.start['state'] = NORMAL
             self.pause['state'] = DISABLED
-            self.teardown['state'] = DISABLED
+            self.teardown['state'] = NORMAL
         elif self.state == self.READY:
-            self.setup['state'] = DISABLED
+            # self.setup['state'] = DISABLED
             self.start['state'] = NORMAL
             self.pause['state'] = DISABLED
             self.teardown['state'] = NORMAL
         elif self.state == self.PLAYING:
-            self.setup['state'] = DISABLED
+            # self.setup['state'] = DISABLED
             self.start['state'] = DISABLED
             self.pause['state'] = NORMAL
             self.teardown['state'] = NORMAL
-#py ClientLauncher.py localhost 10000 10001 movie.Mjpeg
