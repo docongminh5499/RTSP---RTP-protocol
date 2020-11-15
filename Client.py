@@ -24,12 +24,14 @@ class Client:
     PLAY = 1
     PAUSE = 2
     TEARDOWN = 3
+    OPTIONS = 4
+    DESCRIBE = 5
 
     # Initiation..
     def __init__(self, master, serveraddr, serverport, rtpport, filename):
         self.master = master
         self.master.protocol("WM_DELETE_WINDOW", self.handler)
-        self.createWidgets()
+        
         self.serverAddr = serveraddr
         self.serverPort = int(serverport)
         self.rtpPort = int(rtpport)
@@ -40,6 +42,7 @@ class Client:
         self.teardownAcked = 0
         self.connectToServer()
         self.frameNbr = 0
+        self.createWidgets()
 
     def createWidgets(self):
         """Build GUI."""
@@ -74,6 +77,7 @@ class Client:
 
         # FIX: call function
         self.changeStatusButton()
+        #self.setupMovie()
 
     def setupMovie(self):
         """Setup button handler."""
@@ -95,6 +99,12 @@ class Client:
         if self.state == self.PLAYING:
             self.sendRtspRequest(self.PAUSE)
 
+    def sendOptionsRequest(self):
+        self.sendRtspRequest(self.OPTIONS)
+
+    def sendDescribeRequest(self):
+        self.sendRtspRequest(self.DESCRIBE)
+
     def playMovie(self):
         """Play button handler."""
         if self.state == self.READY:
@@ -108,8 +118,6 @@ class Client:
         """Listen for RTP packets."""
         while True:
             try:
-                # FIX: handle 404
-                self.rtpSocket.settimeout(0.5)
                 data = self.rtpSocket.recv(20480)
                 if data:
                     rtpPacket = RtpPacket()
@@ -137,11 +145,6 @@ class Client:
                     self.rtpSocket.shutdown(socket.SHUT_RDWR)
                     self.rtpSocket.close()
                     break
-                
-                # FIX: handle timeout exception
-                if (self.frameNbr == 0):
-                    tkinter.messagebox.showwarning("File not found", "Can not find " + self.fileName)
-                    break
 
     def writeFrame(self, data):
         """Write the received frame to a temp image file. Return the image file."""
@@ -167,6 +170,9 @@ class Client:
             tkinter.messagebox.showwarning(
                 'Connection Failed', 'Connection to \'%s\' failed.' % self.serverAddr)
 
+        self.sendOptionsRequest()
+        self.sendDescribeRequest()
+
     def sendRtspRequest(self, requestCode):
         """Send RTSP request to the server."""
         # -------------
@@ -175,7 +181,7 @@ class Client:
 
         # Setup request
         if requestCode == self.SETUP and self.state == self.INIT:
-            threading.Thread(target=self.recvRtspReply).start()
+            
             # Update RTSP sequence number.
             self.rtspSeq += 1
             # Write the RTSP request to be sent.
@@ -222,6 +228,27 @@ class Client:
             # Keep track of the sent request.
             # self.requestSent = ...
             self.requestSent = self.TEARDOWN
+        elif requestCode == self.OPTIONS:
+            threading.Thread(target=self.recvRtspReply).start()
+            # Update RTSP sequence number.
+            self.rtspSeq += 1
+            # Write the RTSP request to be sent.
+            # request = ...
+            request = "OPTIONS " + self.fileName + " RTSP/1.0\nCSeq: " + \
+                str(self.rtspSeq) + "\nRequire: " + "implicit-play"
+            # Keep track of the sent request.
+            # self.requestSent = ...
+            self.requestSent = self.OPTIONS
+        elif requestCode == self.DESCRIBE:
+            # Update RTSP sequence number.
+            self.rtspSeq += 1
+            # Write the RTSP request to be sent.
+            # request = ...
+            request = "DESCRIBE " + self.fileName + " RTSP/1.0\nCSeq: " + \
+                str(self.rtspSeq) + "\nAccept: application/sdp, application/rtsl, application/mheg"
+            # Keep track of the sent request.
+            # self.requestSent = ...
+            self.requestSent = self.DESCRIBE
         else:
             return
 
@@ -233,7 +260,7 @@ class Client:
         """Receive RTSP reply from the server."""
         while True:
             reply = self.rtspSocket.recv(1024)
-
+        
             if reply:
                 self.parseRtspReply(reply.decode("utf-8"))
 
@@ -250,40 +277,46 @@ class Client:
 
         # Process only if the server reply's sequence number is the same as the request's
         if seqNum == self.rtspSeq:
-            session = int(lines[2].split(' ')[1])
-            # New RTSP session ID
-            if self.sessionId == 0:
-                self.sessionId = session
+            if self.requestSent == self.OPTIONS:
+                print(data)
+            elif self.requestSent == self.DESCRIBE:
+                print(data)
+            else:
+                session = int(lines[2].split(' ')[1])
+                # New RTSP session ID
+                if self.sessionId == 0:
+                    self.sessionId = session
 
-            # Process only if the session ID is the same
-            if self.sessionId == session:
-                if int(lines[0].split(' ')[1]) == 200:
-                    if self.requestSent == self.SETUP:
-                        # -------------
-                        # TO COMPLETE
-                        # -------------
-                        # Update RTSP state.
-                        # self.state = ...
-                        self.state = self.READY
-                        # Open RTP port.
-                        self.openRtpPort()
-                    elif self.requestSent == self.PLAY:
-                        # self.state = ...
-                        self.state = self.PLAYING
-                    elif self.requestSent == self.PAUSE:
-                        # self.state = ...
-                        self.state = self.READY
-                        # The play thread exits. A new thread is created on resume.
-                        self.playEvent.set()
-                    elif self.requestSent == self.TEARDOWN:
-                        # self.state = ...
-                        self.state = self.INIT
-                        # Flag the teardownAcked to close the socket.
-                        self.teardownAcked = 1
+                # Process only if the session ID is the same
+                if self.sessionId == session:
+                    if int(lines[0].split(' ')[1]) == 200:
+                        if self.requestSent == self.SETUP:
+                            # -------------
+                            # TO COMPLETE
+                            # -------------
+                            # Update RTSP state.
+                            # self.state = ...
+                            self.state = self.READY
+                            # Open RTP port.
+                            self.openRtpPort()
+                            #self.playMovie()
+                        elif self.requestSent == self.PLAY:
+                            # self.state = ...
+                            self.state = self.PLAYING
+                        elif self.requestSent == self.PAUSE:
+                            # self.state = ...
+                            self.state = self.READY
+                            # The play thread exits. A new thread is created on resume.
+                            self.playEvent.set()
+                        elif self.requestSent == self.TEARDOWN:
+                            # self.state = ...
+                            self.state = self.INIT
+                            # Flag the teardownAcked to close the socket.
+                            self.teardownAcked = 1
 
-                    # FIX: call function
-                    if (self.teardownAcked == 0):
-                        self.changeStatusButton()
+                        # FIX: call function
+                        if (self.teardownAcked == 0):
+                            self.changeStatusButton()
 
     def openRtpPort(self):
         """Open RTP socket binded to a specified port."""
@@ -330,3 +363,4 @@ class Client:
             self.start['state'] = DISABLED
             self.pause['state'] = NORMAL
             self.teardown['state'] = NORMAL
+#py ClientLauncher.py localhost 10000 10001 movie.Mjpeg
