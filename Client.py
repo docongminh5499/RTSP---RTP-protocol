@@ -26,6 +26,7 @@ class Client:
     TEARDOWN = 3
     OPTIONS = 4
     DESCRIBE = 5
+    counter = 0
 
     # Initiation..
     def __init__(self, master, serveraddr, serverport, rtpport, filename):
@@ -134,10 +135,13 @@ class Client:
                 if data:
                     rtpPacket = RtpPacket()
                     rtpPacket.decode(data)
-
-                    currFrameNbr = rtpPacket.seqNum()
-                    print("Current Seq Num: " + str(currFrameNbr))
-
+                    try: 
+                        if self.frameNbr + 1 != rtpPacket.seqNum():
+                            self.counter += 1
+                        currFrameNbr = rtpPacket.seqNum()
+                        print("Current Seq Num: " + str(currFrameNbr))
+                    except:
+                        print("seqNum() error")
                     if currFrameNbr > self.frameNbr:  # Discard the late packet
                         self.frameNbr = currFrameNbr
                         # FIX: add condition
@@ -225,8 +229,10 @@ class Client:
             self.rtspSeq += 1
             # Write the RTSP request to be sent.
             # request = ...
+            rateLoss = float(self.counter/self.frameNbr)
             request = "PAUSE " + self.fileName + " RTSP/1.0\nCSeq: " + \
-                str(self.rtspSeq) + "\nSession: " + str(self.sessionId)
+                str(self.rtspSeq) + "\nSession: " + str(self.sessionId) + \
+                "\nPacket Loss Rate: " + str(rateLoss) 
             # Keep track of the sent request.
             # self.requestSent = ...
             self.requestSent = self.PAUSE
@@ -237,8 +243,10 @@ class Client:
             self.rtspSeq += 1
             # Write the RTSP request to be sent.
             # request = ...
+            rateLoss = float(self.counter/self.frameNbr)
             request = "TEARDOWN " + self.fileName + " RTSP/1.0\nCSeq: " + \
-                str(self.rtspSeq) + "\nSession: " + str(self.sessionId)
+                str(self.rtspSeq) + "\nSession: " + str(self.sessionId) + \
+                "\nPacket Loss Rate: " + str(rateLoss) 
             # Keep track of the sent request.
             # self.requestSent = ...
             self.requestSent = self.TEARDOWN
