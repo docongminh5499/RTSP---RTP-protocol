@@ -66,7 +66,7 @@ class Client:
         # Create Play button
         self.start = Button(self.master, width=20, padx=3, pady=3)
         self.start["text"] = "Play"
-        self.start["command"] = self.setupMovie
+        self.start["command"] = self.playMovie
         self.start.grid(row=1, column=2, padx=2, pady=2)
 
         # Create Pause button
@@ -93,7 +93,6 @@ class Client:
         """Setup button handler."""
         if self.state == self.INIT:
             self.sendRtspRequest(self.SETUP)
-        else: self.playMovie()
 
 
     def exitClient(self):
@@ -131,6 +130,7 @@ class Client:
         while True:
             try:
                 data = self.rtpSocket.recv(20480)
+                self.rtpSocket.settimeout(0.5)
                 if data:
                     rtpPacket = RtpPacket()
                     rtpPacket.decode(data)
@@ -158,6 +158,10 @@ class Client:
                     self.rtpSocket.close()
                     break
 
+                if (self.frameNbr == 0):
+                    tkinter.messagebox.showwarning("File not found", "Can not find " + self.fileName)
+                    break
+
     def writeFrame(self, data):
         """Write the received frame to a temp image file. Return the image file."""
         cachename = CACHE_FILE_NAME + str(self.sessionId) + CACHE_FILE_EXT
@@ -178,7 +182,7 @@ class Client:
         self.rtspSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.rtspSocket.connect((self.serverAddr, self.serverPort))
-            threading.Thread(target=self.recvRtspReply).start()
+            self.setupMovie()
         except:
             tkinter.messagebox.showwarning(
                 'Connection Failed', 'Connection to \'%s\' failed.' % self.serverAddr)
@@ -191,7 +195,7 @@ class Client:
 
         # Setup request
         if requestCode == self.SETUP and self.state == self.INIT:
-            
+            threading.Thread(target=self.recvRtspReply).start()
             # Update RTSP sequence number.
             self.rtspSeq += 1
             # Write the RTSP request to be sent.
@@ -310,7 +314,6 @@ class Client:
                             self.state = self.READY
                             # Open RTP port.
                             self.openRtpPort()
-                            self.playMovie()
 
                         elif self.requestSent == self.PLAY:
                             # self.state = ...
@@ -362,9 +365,9 @@ class Client:
     def changeStatusButton(self):
         if self.state == self.INIT:
             # self.setup['state'] = NORMAL
-            self.start['state'] = NORMAL
+            self.start['state'] = DISABLED
             self.pause['state'] = DISABLED
-            self.teardown['state'] = NORMAL
+            self.teardown['state'] = DISABLED
         elif self.state == self.READY:
             # self.setup['state'] = DISABLED
             self.start['state'] = NORMAL
